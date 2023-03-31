@@ -28,7 +28,8 @@ public partial class CameraRenderer
     private Lighting lighting = new Lighting();
 
     //摄像机渲染器的渲染函数，在当前渲染上下文的基础上渲染当前摄像机
-    public void Render(ScriptableRenderContext context, Camera camera, bool useDynamicBatching, bool useGPUInstancing)
+    public void Render(ScriptableRenderContext context, Camera camera, bool useDynamicBatching, bool useGPUInstancing,
+        ShadowSettings shadowSettings)
     {
         //设定当前上下文和摄像机
         this.context = context;
@@ -37,24 +38,27 @@ public partial class CameraRenderer
         PrepareBuffer();
         PrepareForSceneWindow();
         
-        if (!Cull())
+        if (!Cull(shadowSettings.maxDistance))
         {
             return;
         }
-        
+
+        buffer.BeginSample(SampleName);
+        ExecuteBuffer();
+        lighting.Setup(context, cullingResults, shadowSettings);
+        buffer.EndSample(SampleName);
         Setup();
-        //将光源信息传递给GPU
-        lighting.Setup(context,cullingResults);
         DrawVisibleGeometry(useDynamicBatching, useGPUInstancing);
         DrawUnsupportedShaders();
         DrawGizmos();
+        lighting.Cleanup();     //完成因ShadowAtlas所有工作后，释放ShadowAtlas RT
         Submit();
-    }
+    } 
 
     void Setup()
-    {
-        //把当前摄像机的信息告诉上下文，这样shader中就可以获取到当前帧下摄像机的信息，比如VP矩阵等
-        //同时也会设置当前的Render Target，这样ClearRenderTarget可以直接清除Render Target中的数据，而不是通过绘制一个全屏的quad来达到同样效果（比较费）
+    {      
+        // 把当前摄像机的信息告诉上下文，这样shader中就可以获取到当前帧下摄像机的信息，比如VP矩阵等
+        // 同时也会设置当前的Render Target，这样ClearRenderTarget可以直接清除Render Target中的数据，而不是通过绘制一个全屏的quad来达到同样效果（比较费）
         context.SetupCameraProperties(camera);
         CameraClearFlags flags = camera.clearFlags;
         //清除当前摄像机Render Target中的内容,包括深度和颜色，ClearRenderTarget内部会Begin/EndSample(buffer.name)
@@ -116,11 +120,12 @@ public partial class CameraRenderer
         buffer.Clear();
     }
 
-    bool Cull()
+    bool Cull(float maxShadowDistance)
     {
         //获取摄像机用于剔除的参数
         if (camera.TryGetCullingParameters(out ScriptableCullingParameters p))
         {
+            p.shadowDistance = Mathf.Min(maxShadowDistance, camera.farClipPlane);
             cullingResults = context.Cull(ref p);
             return true;
         }
