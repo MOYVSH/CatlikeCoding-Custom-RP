@@ -16,10 +16,12 @@ public class Lighting
     //改为传递Vector4数组+当前传递光源数
     private static int dirLightCountId = Shader.PropertyToID("_DirectionalLightCount"),
         dirLightColorsId = Shader.PropertyToID("_DirectionalLightColors"),
-        dirLightDirectionsId = Shader.PropertyToID("_DirectionalLightDirections");
+        dirLightDirectionsId = Shader.PropertyToID("_DirectionalLightDirections"),
+        dirLightShadowDataId = Shader.PropertyToID("_DirectionalLightShadowData");
 
     private static Vector4[] dirLightColors = new Vector4[maxDirLightCount],
-        dirLightDirections = new Vector4[maxDirLightCount];
+                             dirLightDirections = new Vector4[maxDirLightCount],
+                             dirLightShadowData = new Vector4[maxDirLightCount];
 
     private CommandBuffer buffer = new CommandBuffer()
     {
@@ -60,7 +62,7 @@ public class Lighting
         dirLightColors[index] = visibleLight.finalColor;
         //光源方向为光源localToWorldMatrix的第三列，这里也需要取反
         dirLightDirections[index] = -visibleLight.localToWorldMatrix.GetColumn(2);
-        shadows.ReserveDirectionalShadows(visibleLight.light, index);
+        dirLightShadowData[index] = shadows.ReserveDirectionalShadows(visibleLight.light, index);
     }
 
     void SetupLights()
@@ -89,6 +91,7 @@ public class Lighting
         buffer.SetGlobalInt(dirLightCountId, visibleLights.Length);
         buffer.SetGlobalVectorArray(dirLightColorsId, dirLightColors);
         buffer.SetGlobalVectorArray(dirLightDirectionsId, dirLightDirections);
+        buffer.SetGlobalVectorArray(dirLightShadowDataId, dirLightShadowData);
     }
 
     public void Cleanup()

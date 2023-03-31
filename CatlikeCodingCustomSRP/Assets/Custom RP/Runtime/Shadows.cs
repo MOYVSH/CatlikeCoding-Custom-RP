@@ -1,6 +1,14 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 
+// 可以理解为在光的位置放一个相机，能看到的地方就没阴影，看不到的地方就有阴影
+// 如果没有那就没有阴影
+// 从光照过来的方向如果前面有东西挡住那就处于阴影中
+// 阴影的算法实际上就是通过深度图来检测遮挡关系
+
+
+
+
 //所有Shadow Map相关逻辑，其上级为Lighting类
 public class Shadows
 {
@@ -19,20 +27,24 @@ public class Shadows
 
     const int maxShadowedDirectionalLightCount = 4;
 
-    //用于获取当前支持阴影的方向光源的一些信息
+    // 用于获取当前支持阴影的方向光源的一些信息
     struct ShadowedDirectionalLight
     {        
         //当前光源的索引，猜测该索引为CullingResults中光源的索引(也是Lighting类下的光源索引，它们都是统一的，非常不错~）
         public int visibleLightIndex;
     }
-    //虽然我们目前最大光源数为1，但依然用数组存储，因为最大数量可配置嘛~
+    // 虽然我们目前最大光源数为1，但依然用数组存储，因为最大数量可配置嘛~
     ShadowedDirectionalLight[] ShadowedDirectionalLights =
         new ShadowedDirectionalLight[maxShadowedDirectionalLightCount];
-    //当前已配置完毕的方向光源数
+    // 当前已配置完毕的方向光源数
     int ShadowedDirectionalLightCount;
 
-    static int dirShadowAtlasId = Shader.PropertyToID("_DirectionalShadowAtlas");
-
+    // 方向光源Shadow Atlas、阴影变化矩阵数组的标识
+    static int dirShadowAtlasId = Shader.PropertyToID("_DirectionalShadowAtlas"),
+               dirShadowMatricesId = Shader.PropertyToID("_DirectionalShadowMatrices");
+    // 将世界坐标转换到阴影贴图上的像素坐标的变换矩阵
+    static Matrix4x4[]
+            dirShadowMatrices = new Matrix4x4[maxShadowedDirectionalLightCount];
 
     public void Setup(ScriptableRenderContext context, CullingResults cullingResults,
         ShadowSettings settings)
@@ -45,7 +57,7 @@ public class Shadows
     }
 
     // 每帧执行，用于为light配置shadow altas（shadowMap）上预留一片空间来渲染阴影贴图，同时存储一些其他必要信息
-    public void ReserveDirectionalShadows(Light light, int visibleLightIndex) 
+    public Vector2 ReserveDirectionalShadows(Light light, int visibleLightIndex) 
     {
         // 配置光源数不超过最大值   
         // 只配置开启阴影且阴影强度大于0的光源
@@ -56,12 +68,15 @@ public class Shadows
             cullingResults.GetShadowCasterBounds(visibleLightIndex, out Bounds b))
 
         {
-            ShadowedDirectionalLights[ShadowedDirectionalLightCount++] =
+            ShadowedDirectionalLights[ShadowedDirectionalLightCount] =
                 new ShadowedDirectionalLight
                 {
                     visibleLightIndex = visibleLightIndex
                 };
+            return new Vector2(light.shadowStrength, ShadowedDirectionalLightCount++);
         }
+
+        return Vector2.zero;
     }
 
     //渲染阴影贴图
@@ -107,6 +122,7 @@ public class Shadows
             RenderDirectionalShadows(i, split, tileSize);
         }
 
+        buffer.SetGlobalMatrixArray(dirShadowMatricesId, dirShadowMatrices);
         buffer.EndSample(bufferName);
         ExecuteBuffer();
     }
@@ -134,7 +150,9 @@ public class Shadows
             out Matrix4x4 viewMatrix, out Matrix4x4 projectionMatrix, out ShadowSplitData splitData);
         //splitData包括投射阴影物体应该如何被裁剪的信息，我们需要把它传递给shadowSettings
         shadowSettings.splitData = splitData;
-        SetTileViewport(index, split, tileSize);
+        dirShadowMatrices[index] = ConvertToAtlasMatrix(projectionMatrix * viewMatrix,
+                                                        SetTileViewport(index, split, tileSize),
+                                                        split);
         //将当前VP矩阵设置为计算出的VP矩阵，准备渲染阴影贴图
         buffer.SetViewProjectionMatrices(viewMatrix, projectionMatrix);
         ExecuteBuffer();
@@ -148,14 +166,42 @@ public class Shadows
     /// <param name="index">Tile索引</param>
     /// <param name="split">Tile一个方向上的总数</param>
     /// <param name="tileSize">一个Tile的宽度（高度）</param>
-    void SetTileViewport(int index, int split, float tileSize)
+    Vector2 SetTileViewport(int index, int split, float tileSize)
     {
         Vector2 offset = new Vector2(index % split, index / split);
         buffer.SetViewport(new Rect(
             offset.x * tileSize, offset.y * tileSize, tileSize, tileSize
         ));
+        return offset;
     }
 
+    Matrix4x4 ConvertToAtlasMatrix(Matrix4x4 m, Vector2 offset, int split)
+    {
+        //如果使用反向Z缓冲区，为Z取反
+        if (SystemInfo.usesReversedZBuffer)
+        {
+            m.m20 = -m.m20;
+            m.m21 = -m.m21;
+            m.m22 = -m.m22;
+            m.m23 = -m.m23;
+        }
+        //光源裁剪空间坐标范围为[-1,1]，而纹理坐标和深度都是[0,1]，因此，我们将裁剪空间坐标转化到[0,1]内
+        //然后将[0,1]下的x,y偏移到光源对应的Tile上
+        float scale = 1f / split;
+        m.m00 = (0.5f * (m.m00 + m.m30) + offset.x * m.m30) * scale;
+        m.m01 = (0.5f * (m.m01 + m.m31) + offset.x * m.m31) * scale;
+        m.m02 = (0.5f * (m.m02 + m.m32) + offset.x * m.m32) * scale;
+        m.m03 = (0.5f * (m.m03 + m.m33) + offset.x * m.m33) * scale;
+        m.m10 = (0.5f * (m.m10 + m.m30) + offset.y * m.m30) * scale;
+        m.m11 = (0.5f * (m.m11 + m.m31) + offset.y * m.m31) * scale;
+        m.m12 = (0.5f * (m.m12 + m.m32) + offset.y * m.m32) * scale;
+        m.m13 = (0.5f * (m.m13 + m.m33) + offset.y * m.m33) * scale;
+        m.m20 = 0.5f * (m.m20 + m.m30);
+        m.m21 = 0.5f * (m.m21 + m.m31);
+        m.m22 = 0.5f * (m.m22 + m.m32);
+        m.m23 = 0.5f * (m.m23 + m.m33);
+        return m;
+    }
 
     //完成因ShadowAtlas所有工作后，释放ShadowAtlas RT
     public void Cleanup()
