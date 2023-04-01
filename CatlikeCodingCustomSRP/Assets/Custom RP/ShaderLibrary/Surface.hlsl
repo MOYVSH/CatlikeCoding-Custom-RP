@@ -11,6 +11,9 @@ struct Surface
     float3 normal;
     //观察方向：物体表面指向摄像机
     float3 viewDirection;
+    
+    float depth;
+
     //表面颜色
     float3 color;
     //透明度
