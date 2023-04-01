@@ -47,7 +47,10 @@ Shader "Custom RP/Lit"
             //告诉Unity启用_CLIPPING关键字时编译不同版本的Shader
             #pragma shader_feature _CLIPPING
             //定义diffuse项是否使用Premultiplied alpha的关键字
-            #pragma shader_feature _PREMULTIPLY_ALPHA
+            #pragma shader_feature _PREMULTIPLY_ALPHA 
+            //定义使用那一个PCF的宏 没有2x2的 写在CustomLit的Pass里 很重要
+            #pragma multi_compile _ _DIRECTIONAL_PCF3 _DIRECTIONAL_PCF5 _DIRECTIONAL_PCF7
+            #pragma multi_compile _ _CASCADE_BLEND_SOFT _CASCADE_BLEND_DITHER
             //这一指令会让Unity生成两个该Shader的变体，一个支持GPU Instancing，另一个不支持。
             #pragma multi_compile_instancing
             #pragma vertex LitPassVertex
