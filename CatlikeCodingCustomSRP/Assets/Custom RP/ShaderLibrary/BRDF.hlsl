@@ -20,6 +20,10 @@ struct BRDF
     float3 specular;
     //物体表面粗糙度
     float3 roughness;
+    // 感知粗糙度？
+    float perceptualRoughness;
+    // 菲涅尔
+    float fresnel;
 };
 
 BRDF GetBRDF(Surface surface,bool applyAlphaToDiffuse = false)
@@ -40,9 +44,10 @@ BRDF GetBRDF(Surface surface,bool applyAlphaToDiffuse = false)
     brdf.specular = lerp(MIN_REFLECTIVITY,surface.color,surface.metallic);
     //先根据surface.smoothness计算出感知粗糙度，再将感知粗糙度转为实际粗糙度
     //PerceptualSmoothnessToPerceptualRoughness返回值就是(1-surface.smoothness)
-    float perceptualRoughness = PerceptualSmoothnessToPerceptualRoughness(surface.smoothness);
+    brdf.perceptualRoughness = PerceptualSmoothnessToPerceptualRoughness(surface.smoothness);
     //PerceptualRoughnessToRoughness返回的就是perceptualRoughness的平方
-    brdf.roughness = PerceptualRoughnessToRoughness(perceptualRoughness);
+    brdf.roughness = PerceptualRoughnessToRoughness(brdf.perceptualRoughness);
+    brdf.fresnel = saturate(surface.smoothness + 1.0 - oneMinusReflectivity);
     return brdf;
 }
 
@@ -64,6 +69,15 @@ float3 DirectBRDF(Surface surface,BRDF brdf,Light light)
 {
     //观察角度接收到的高光能量 * 物体表面反射出的高光能量 + 各向均匀的漫反射能量
     return SpecularStrength(surface,brdf,light) * brdf.specular + brdf.diffuse;
+}
+// 间接光反射
+float3 IndirectBRDF(Surface surface, BRDF brdf, float3 diffuse, float3 specular)
+{
+    float fresnelStrength = surface.fresnelStrength * Pow4(1.0 - saturate(dot(surface.normal, surface.viewDirection)));
+    float3 reflection = specular * lerp(brdf.specular, brdf.fresnel, fresnelStrength);
+    // 通过平方 - 1的形式控制粗糙对对反射的影响 低粗糙度影响小 高粗糙度会使反射减半
+    reflection /= brdf.roughness * brdf.roughness + 1.0;
+    return diffuse * brdf.diffuse + reflection;
 }
 
 #endif

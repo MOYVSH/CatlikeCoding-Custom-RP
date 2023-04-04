@@ -21,6 +21,8 @@ Shader "Custom RP/Lit"
         _Metallic("Metallic",Range(0,1)) = 0
         //光滑度
         _Smoothness("Smoothness",Range(0,1)) = 0.5
+        // 菲涅尔
+        _Fresnel("Fresnel", Range(0, 1)) = 1
         //自发光纹理，使用的变换同BaseMap
         [NoScaleOffset]_EmissionMap("Emission",2D) = "white"{}
         //自发光颜色，使用HDR颜色
@@ -75,6 +77,9 @@ Shader "Custom RP/Lit"
             #pragma multi_compile _ _SHADOW_MASK_ALWAYS _SHADOW_MASK_DISTANCE
             //定义光照贴图的关键字，启用光照贴图时，Unity会自动使用开启该关键字的着色器变体
             #pragma multi_compile _ LIGHTMAP_ON
+
+            #pragma multi_compile _ LOD_FADE_CROSSFADE
+
             //这一指令会让Unity生成两个该Shader的变体，一个支持GPU Instancing，另一个不支持。
             #pragma multi_compile_instancing
             #pragma vertex LitPassVertex
@@ -99,6 +104,9 @@ Shader "Custom RP/Lit"
             #pragma target 3.5
             //阴影投射模式
             #pragma shader_feature _ _SHADOWS_CLIP _SHADOWS_DITHER
+
+            #pragma multi_compile _ LOD_FADE_CROSSFADE
+
             //定义diffuse项是否使用Premultiplied alpha的关键字
             #pragma multi_compile_instancing
             #pragma vertex ShadowCasterPassVertex
