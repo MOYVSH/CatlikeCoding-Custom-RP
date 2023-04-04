@@ -26,6 +26,7 @@ float3 GetLighting(Surface surfaceWS,BRDF brdf, GI gi)
 {
     //计算片元的级联阴影信息
     ShadowData shadowData = GetShadowData(surfaceWS);
+    shadowData.shadowMask = gi.shadowMask;
     //光照结果初始化为烘培好的gi光照结果
     float3 color = gi.diffuse * brdf.diffuse;
     //使用循环，累积所有有效方向光源的光照计算结果

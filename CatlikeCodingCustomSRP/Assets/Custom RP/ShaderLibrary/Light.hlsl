@@ -12,7 +12,7 @@ CBUFFER_START(_CustomLight)
     //注意CBUFFER中创建数组的格式,在Shader中数组在创建时必须明确其长度，创建完毕后不允许修改
     float4 _DirectionalLightColors[MAX_DIRECTIONAL_LIGHT_COUNT];
     float4 _DirectionalLightDirections[MAX_DIRECTIONAL_LIGHT_COUNT];
-    //ShadowData实际是Vector2，但是依然使用Vector4包装
+    //ShadowData
     float4 _DirectionalLightShadowData[MAX_DIRECTIONAL_LIGHT_COUNT];
 CBUFFER_END
 
@@ -41,6 +41,8 @@ DirectionalShadowData GetDirectionalShadowData(int lightIndex, ShadowData shadow
     data.tileIndex = _DirectionalLightShadowData[lightIndex].y + shadowData.cascadeIndex;
     //阴影法线偏移系数
     data.normalBias = _DirectionalLightShadowData[lightIndex].z;
+    // 通过shadowdata第四个值传递阴影遮罩信息
+    data.shadowMaskChannel = _DirectionalLightShadowData[lightIndex].w;
     return data;
 }
 

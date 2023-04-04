@@ -88,7 +88,10 @@ public partial class CameraRenderer
             enableDynamicBatching = useDynamicBatching,
             enableInstancing = useGPUInstancing,
             //传递场景中所有参与GI的物体在光照贴图上的UV、每个物体的光照探针信息、大型物体的LPPV信息
-            perObjectData = PerObjectData.Lightmaps | PerObjectData.LightProbe | PerObjectData.LightProbeProxyVolume
+            perObjectData = PerObjectData.Lightmaps | PerObjectData.ShadowMask |
+                            PerObjectData.OcclusionProbe | PerObjectData.LightProbe |
+                            PerObjectData.LightProbeProxyVolume |
+                            PerObjectData.OcclusionProbeProxyVolume
         };
         //增加对Lit.shader的绘制支持,index代表本次DrawRenderer中该pass的绘制优先级（0最先绘制）
         drawingSettings.SetShaderPassName(1, litShaderTagId);//"LightMode"="CustomLit"

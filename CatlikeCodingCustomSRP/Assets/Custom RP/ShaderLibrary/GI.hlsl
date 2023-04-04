@@ -9,6 +9,9 @@
 TEXTURE2D(unity_Lightmap);
 SAMPLER(samplerunity_Lightmap);
 
+TEXTURE2D(unity_ShadowMask);
+SAMPLER(samplerunity_ShadowMask);
+
 //LPPV的3D纹理
 TEXTURE3D_FLOAT(unity_ProbeVolumeSH);
 SAMPLER(sampler_unity_ProbeVolumeSH);
@@ -35,6 +38,7 @@ struct GI
 {
     //片元接收到的GI光照结果，该光照结果为光照贴图上采样得到，这部分光照能量会被全部以漫反射形式在表面反射出去。
     float3 diffuse;
+    ShadowMask shadowMask;
 };
 
 //采样光照贴图
@@ -90,6 +94,29 @@ float3 SampleLightProbe(Surface surfaceWS)
     #endif
 }
 
+float4 SampleBakedShadows(float2 lightMapUV, Surface surfaceWS)
+{
+#if defined(LIGHTMAP_ON)
+	return SAMPLE_TEXTURE2D(
+		unity_ShadowMask, samplerunity_ShadowMask, lightMapUV
+	);
+#else
+    if (unity_ProbeVolumeParams.x)
+    {
+        return SampleProbeOcclusion(
+				TEXTURE3D_ARGS(unity_ProbeVolumeSH, sampler_unity_ProbeVolumeSH),
+				surfaceWS.position, unity_ProbeVolumeWorldToObject,
+				unity_ProbeVolumeParams.y, unity_ProbeVolumeParams.z,
+				unity_ProbeVolumeMin.xyz, unity_ProbeVolumeSizeInv.xyz
+			);
+    }
+    else
+    {
+        return unity_ProbesOcclusion;
+    }
+#endif
+}
+
 //得到片元的GI结果，传入当前片元在光照贴图上的UV，传入表面片元
 GI GetGI(float2 lightMapUV, Surface surfaceWS)
 {
@@ -98,6 +125,20 @@ GI GetGI(float2 lightMapUV, Surface surfaceWS)
     //采样光照探针作为表面片元接收到GI上的diffuse光照
     //两者只得一
     gi.diffuse = SampleLightMap(lightMapUV) + SampleLightProbe(surfaceWS);
+    gi.shadowMask.always = false;
+    gi.shadowMask.distance = false;
+    gi.shadowMask.shadows = 1.0;
+    
+    #if defined(_SHADOW_MASK_ALWAYS)
+		gi.shadowMask.always = true;
+		gi.shadowMask.shadows = SampleBakedShadows(lightMapUV, surfaceWS);
+	#elif defined(_SHADOW_MASK_DISTANCE)
+		gi.shadowMask.distance = true;
+		gi.shadowMask.shadows = SampleBakedShadows(lightMapUV, surfaceWS);
+	#endif
+    
     return gi;
 }
+
+
 #endif
