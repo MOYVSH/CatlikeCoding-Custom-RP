@@ -95,6 +95,8 @@ Shader "Custom RP/Lit"
             #pragma shader_feature _PREMULTIPLY_ALPHA
             //定义PCF关键字,无关键字为2
             #pragma multi_compile _ _DIRECTIONAL_PCF3 _DIRECTIONAL_PCF5 _DIRECTIONAL_PCF7
+            #pragma multi_compile _ _OTHER_PCF3 _OTHER_PCF5 _OTHER_PCF7
+            
             //定义级联混合的关键字
             #pragma multi_compile _ _CASCADE_BLEND_SOFT _CASCADE_BLEND_DITHER
             //定义是否启用阴影遮罩，当光源的lightMode为ShadowMask且光源lightmapBakeType为Mixed时开启该关键字，并根据ShadowmaskMode决定开启哪个关键字
